@@ -45,7 +45,7 @@ dim(working_dataset)
 
 Save familiarity null value rows to predict later
 ```{r}
-familiarity_NA_rows <- asian |>
+familiarity_NA_rows <- col_filtered |>
   filter(is.na(familiarity_num))
 ```
 
@@ -75,13 +75,12 @@ working_dataset |>
 ```{r}
 
 
-head(filtered_data)
-filtered_data |>
+working_dataset |>
   ggplot() +
   geom_density(aes(x=Quality.of.Life)) +
   scale_x_continuous(breaks=seq(1,10))
 
-filtered_data |>
+working_dataset |>
   ggplot() +
   geom_histogram(aes(x=Quality.of.Life), bins = 130) +
   scale_x_continuous(breaks=seq(1,10))
@@ -92,6 +91,86 @@ filtered_data |>
 Linear Model
 
 ```{r}
-model <- lm(formula=Quality.of.Life~numeric_familiarity, data=filtered_data)
+model <- lm(formula=Quality.of.Life~familiarity_num, data=working_dataset)
 summary(model)
 ```
+
+
+**The dataset is tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns.There is also no rows with any NA values in any of the variables and there is only the six variable of interest present in the new dataset.**
+
+
+------------------------------------------------------------------------
+
+## 3. Results
+
+**Question 1: How does household size affect the quality of life for Asian Americans?**
+
+```{r}
+# Numeric univariate visualization
+head(working_dataset)
+ggplot(working_dataset) +
+  geom_histogram(aes(x = Household.Size), color = "blue", fill = "orange", # add color and fill
+                 bins= 10, binwidth = 1, center = 1) + # adjust the binwidth + center of the first bin
+  scale_x_continuous(oob = scales::oob_keep, limits = c(0,10), breaks = seq(0,10,1)) + # adjust the tick marks of the x-axis
+  labs(title = "Distribution of Household Size",
+       x = "Household Size",
+       y = "Frequency")
+
+#Skewed to the right, thus median and IQR
+median(working_dataset$Age)
+IQR(working_dataset$Age)
+
+```
+
+**Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 40 +/- 25 years old.**
+
+```{r}
+#Bivariate visualization of age and quality of life
+ggplot(data = working_dataset, aes(x = Household.Size, y = Quality.of.Life)) +
+  # By default a bar represents a count but we can change what the height of a bar represents
+  # Represent a summary stat using the mean function 
+  geom_bar(stat = "summary", fun = "mean",  color = "blue", fill = "orange") +
+  # Adjust the label of the y-axis accordingly
+  labs(y = "Quality of Life (1-10)",
+       y = "Household Size",
+       title = "Quality of Life v. Household Size") +
+  # Add error bars
+  geom_errorbar(stat = "summary", fun.data = "mean_se")
+
+```
+
+**Using the difference between the error bars for each household size as comparison, it seems that there isn’t any correlation between household size and quality of life. The only significant difference can be seen with household size of 7 vs. 2, 4, 5, and 8 which may just be by random chance.**
+
+
+
+Model?
+```{r}
+model <- lm(formula=Quality.of.Life~familiarity_num, data=working_dataset)
+summary(model)
+```
+
+------------------------------------------------------------------------
+
+## 4. Discussion
+
+**Question 1: How does household size affect the quality of life for Asian Americans?**
+
+The visualization showed that there isn’t any correlation between household size and quality of life as seen in visual (#). As seen in the bar graph, there isn’t a significant difference in the mean quality of life (1-10) between the different household sizes. The only exception is household size of 7 vs. 2, 4, 5, and 8 which may just be by random chance. The data didn’t match my expectations because I believe that lower household size would have higher quality of life. A possible reason for why it fails to meet my prediction is that different household sizes each have their own problems and enjoyment. The only result I’m curious about is why the quality of life for household size of 7 dipped compared to the other household size. The implications of my study is that Asian Americans wouldn’t be too worried about having too small or too large of a household size because according to this data, household size didn’t have a noticeable effect on their quality of life. Therefore, Asian Americans can have any household size they want as it wouldn't affect their happiness. The main takeaway for these findings is that household size doesn’t affect quality of life for Asian Americans living in Austin.
+
+**Question 3: What effect does familiarity with America have on Asian American quality of life?**
+
+
+
+------------------------------------------------------------------------
+
+## 5. Reflection, Acknowledgements, and References
+
+**The challenging part was cleaning up the data to ensure that it can be analyzed with the visualization to answer our research questions. Thankfully, the data collected by UT Austin AAQoL Research Team was already tidy to begin with which made the process so much easier. To further clean up the data by removing NA value and only selecting the variables of interest, it was due to Dr. Layot’s lectures on data wrangling that this step went a lot smoother. Additionally, the making of the ggplots for visualizations was also made easier to the lecture material provided by Dr. Layot.**
+
+**Contribution: Wendi (Introduction, everything for question #1, reflection), Kevin (Introduction, result), Austin ()**
+
+**Reference:**
+**Link for dataset: https://data.austintexas.gov/dataset/Final-Report-of-the-Asian-American-Quality-of-Life/hc5t-p62z**
+
+**Link for original study for context: https://www.austintexas.gov/sites/default/files/files/Boards_and_Commissions/Asian%20American%20Quality%20of%20Life%20Study%20(2016).pdf**
+
