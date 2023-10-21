@@ -1,0 +1,97 @@
+---
+title: "Exploration"
+author: "Austin Palmer | ajp4344"
+date: "2023-10-20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
+library(scales)
+```
+
+
+
+```{r}
+# Read in Dataset
+data <- read.csv("~/Classes/sds322E/Project/Final_Report_of_the_Asian_American_Quality_of_Life__AAQoL_.csv")
+
+# Select Columns of Interest
+ col_filtered <- data|>
+  select(Quality.of.Life, Belonging, English.Speaking, Income, Age, Household.Size, Familiarity.with.America)
+
+# Create numeric variable representing a 4 option categorical variable. Easier to work compared to strings.
+col_filtered |>
+  mutate(familiarity_num = case_when(
+    Familiarity.with.America == "Very low" ~ 0,
+    Familiarity.with.America == "Low" ~ 1,
+    Familiarity.with.America == "High" ~ 2,
+    Familiarity.with.America == "Very high" ~ 3,
+    TRUE ~ NA_integer_)) -> col_filtered
+
+# Filter out rows with N/A values in columns of interest
+working_dataset <- col_filtered |>
+  filter(!is.na(Quality.of.Life) & !is.na(Belonging) & !is.na(English.Speaking) & !is.na(Income)   &!is.na(Age) &!is.na(familiarity_num)) -> working_dataset
+  
+# Get init/post-filter dimensions
+dim(data)
+dim(working_dataset)
+
+```
+
+
+
+Save familiarity null value rows to predict later
+```{r}
+familiarity_NA_rows <- asian |>
+  filter(is.na(familiarity_num))
+```
+
+
+```{r}
+
+
+desired_order <- c("Very low", "Low", "High", "Very high")
+desired_order_num <- c(0, 1, 2, 3)
+working_dataset |>
+  ggplot(aes(x = familiarity_num, y=Quality.of.Life, group=Familiarity.with.America)) +
+    geom_violin() +
+    geom_boxplot(width = 0.1, outlier.alpha = .25, outlier.color = "red") +
+    scale_y_continuous(labels = scales::comma) + 
+    labs(
+      title = "Quality of Life Distributions given Familiarity with America",
+      x = "Familiarity with America",
+      y = "Quality of Life"
+    ) +
+  scale_x_continuous(breaks = desired_order_num, labels = desired_order) +
+  theme_bw()
+
+```
+
+
+
+```{r}
+
+
+head(filtered_data)
+filtered_data |>
+  ggplot() +
+  geom_density(aes(x=Quality.of.Life)) +
+  scale_x_continuous(breaks=seq(1,10))
+
+filtered_data |>
+  ggplot() +
+  geom_histogram(aes(x=Quality.of.Life), bins = 130) +
+  scale_x_continuous(breaks=seq(1,10))
+  
+```
+
+
+Linear Model
+
+```{r}
+model <- lm(formula=Quality.of.Life~numeric_familiarity, data=filtered_data)
+summary(model)
+```
