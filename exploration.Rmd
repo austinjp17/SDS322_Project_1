@@ -10,9 +10,38 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(readr)
 library(scales)
+library(broom)
 ```
 
 
+
+
+Linear Model
+
+```{r}
+model <- lm(formula=Quality.of.Life~familiarity_num, data=working_dataset)
+summary(model)
+```
+
+### Names: Wendi Deng (wd4737), Kevin Tran, Austin Palmer
+
+------------------------------------------------------------------------
+
+## 1. Title and Introduction
+
+For this project, the dataset we will use is a survey regardings the [quality of life of Asian Americans in Austin](https://www.austintexas.gov/sites/default/files/files/Boards_and_Commissions/Asian%20American%20Quality%20of%20Life%20Study%20(2016).pdf), Texas. We are interested in this dataset because we want to know what aspects would either increase or decrease the quality of life for Asian Americans living in Austin. This dataset was created by the UT Austin AAQoL Research Team because the researchers wanted to understand the social and health needs of the Asian American community. They mentioned how Asians have overtaken Hispanic as the largest group of immigrants to the US and how by 2050, 10% of the U.S. population will consist of Asians. As a result of this growing minority group, they argued it is important to understand what their needs are to make their life in America better. For our project, we wanted to know what factors may affect Asian Americans’ quality of life. Explanatory variables include household size, whether they speak English well, sense of belonging, income, and age. Each row in the dataset represents the participants in the survey, specifically Asian Americans. We would expect decreased household size, speaking English perfectly, feeling a sense of belonging, high income, and low age would reflect a higher quality of life response in the survey. The following are questions we will answer in this project:
+
+**(Wendi) Question 1: How does household size affect the quality of life for Asian Americans?**
+
+**(Kevin) Question 2: How does income affect the quality of life for Asian Americans?**
+
+**(Austin) Question 3: How do social and cultural dynamics affect the quality of life for Asian Americans?**
+
+------------------------------------------------------------------------
+
+## 2. Method
+
+The dataset obtained from UT Austin AAQoL Research Team was already tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns. However, there still some cleanup left to do such as selecting only the six variable we are interested in and removing rows with NA values in any of these variables.
 
 ```{r}
 # Read in Dataset
@@ -20,7 +49,7 @@ data <- read.csv("~/Classes/sds322E/Project/Final_Report_of_the_Asian_American_Q
 
 # Select Columns of Interest
  col_filtered <- data|>
-  select(Quality.of.Life, Belonging, English.Speaking, Income, Age, Household.Size, Familiarity.with.America)
+  select(Quality.of.Life, Belonging, English.Speaking, Income, Age, Household.Size, Familiarity.with.America, Friends)
 
 # Create numeric variable representing a 4 option categorical variable. Easier to work compared to strings.
 col_filtered |>
@@ -40,61 +69,6 @@ dim(data)
 dim(working_dataset)
 
 ```
-
-
-
-Save familiarity null value rows to predict later
-```{r}
-familiarity_NA_rows <- col_filtered |>
-  filter(is.na(familiarity_num))
-```
-
-
-```{r}
-
-
-desired_order <- c("Very low", "Low", "High", "Very high")
-desired_order_num <- c(0, 1, 2, 3)
-working_dataset |>
-  ggplot(aes(x = familiarity_num, y=Quality.of.Life, group=Familiarity.with.America)) +
-    geom_violin() +
-    geom_boxplot(width = 0.1, outlier.alpha = .25, outlier.color = "red") +
-    scale_y_continuous(labels = scales::comma) + 
-    labs(
-      title = "Quality of Life Distributions given Familiarity with America",
-      x = "Familiarity with America",
-      y = "Quality of Life"
-    ) +
-  scale_x_continuous(breaks = desired_order_num, labels = desired_order) +
-  theme_bw()
-
-```
-
-
-
-```{r}
-
-
-working_dataset |>
-  ggplot() +
-  geom_density(aes(x=Quality.of.Life)) +
-  scale_x_continuous(breaks=seq(1,10))
-
-working_dataset |>
-  ggplot() +
-  geom_histogram(aes(x=Quality.of.Life), bins = 130) +
-  scale_x_continuous(breaks=seq(1,10))
-  
-```
-
-
-Linear Model
-
-```{r}
-model <- lm(formula=Quality.of.Life~familiarity_num, data=working_dataset)
-summary(model)
-```
-
 
 **The dataset is tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns.There is also no rows with any NA values in any of the variables and there is only the six variable of interest present in the new dataset.**
 
@@ -141,11 +115,51 @@ ggplot(data = working_dataset, aes(x = Household.Size, y = Quality.of.Life)) +
 
 **Using the difference between the error bars for each household size as comparison, it seems that there isn’t any correlation between household size and quality of life. The only significant difference can be seen with household size of 7 vs. 2, 4, 5, and 8 which may just be by random chance.**
 
+**Question #3: How do social and cultural dynamics affect the quality of life for Asian Americans?**
+
+```{r}
+# Select variables for analysis of familiarities effect on QoL
+social_dataset <- data |>
+  select(English.Speaking, English.Difficulties, Identify.Ethnically, Familiarity.with.America, Belonging, Discrimination, Duration.of.Residency, US.Born)
+
+working_dataset <- drop_na(social_dataset)
+```
+
+Save familiarity null value rows to predict later
+```{r}
+social_NA_rows <- social_dataset[!complete.cases(social_dataset), ]
+```
+
+```{r}
+# Ordered Label Switch Vectors
+desired_order <- c("Very low", "Low", "High", "Very high")
+desired_order_num <- c(0, 1, 2, 3)
+
+# Distribution of QoL depicted w/ Violin Plot for each familiarity level
+# Box Plot included for easy comparison of means between groups
+familiarity_dataset |>
+  ggplot(aes(x = as.factor(familiarity_num), y = Quality.of.Life)) +
+  geom_violin(aes(fill = familiarity_num)) +
+  geom_boxplot(fill="#3d3d3d", color="black", width = 0.1, outlier.alpha = 0.25, outlier.color = "red") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(
+    title = "Quality of Life Distributions given Familiarity with America",
+    x = "Familiarity with America",
+    y = "Quality of Life"
+  ) +
+  scale_x_discrete(breaks = desired_order_num, labels = desired_order) +
+  scale_fill_gradient(low = "blue", high = "red") +  # Optional: Color gradient for fill
+  theme_bw() +
+  theme(legend.position = "none")
+
+```
+
 
 
 Model?
 ```{r}
-model <- lm(formula=Quality.of.Life~familiarity_num, data=working_dataset)
+
+model <- lm(formula=Quality.of.Life~ familiarity_num + Friends, data=working_dataset)
 summary(model)
 ```
 
