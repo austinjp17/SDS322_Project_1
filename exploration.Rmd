@@ -1,8 +1,8 @@
 ---
 title: "Exploration"
-author: "Austin Palmer | ajp4344"
+author: "Wendi Deng (wd4737), Kevin Tran, Austin Palmer (ajp4344)"
 date: "2023-10-20"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
@@ -11,19 +11,8 @@ library(tidyverse)
 library(readr)
 library(scales)
 library(broom)
+library(gridExtra)
 ```
-
-
-
-
-Linear Model
-
-```{r}
-model <- lm(formula=Quality.of.Life~familiarity_num, data=working_dataset)
-summary(model)
-```
-
-### Names: Wendi Deng (wd4737), Kevin Tran, Austin Palmer
 
 ------------------------------------------------------------------------
 
@@ -45,32 +34,80 @@ The dataset obtained from UT Austin AAQoL Research Team was already tidy because
 
 ```{r}
 # Read in Dataset
-data <- read.csv("~/Classes/sds322E/Project/Final_Report_of_the_Asian_American_Quality_of_Life__AAQoL_.csv")
+data <- read.csv(
+  "~/Classes/sds322E/Project/Final_Report_of_the_Asian_American_Quality_of_Life__AAQoL_.csv"
+  )
 
 # Select Columns of Interest
  col_filtered <- data|>
   select(Quality.of.Life, Belonging, English.Speaking, Income, Age, Household.Size, Familiarity.with.America, Friends)
 
-# Create numeric variable representing a 4 option categorical variable. Easier to work compared to strings.
-col_filtered |>
-  mutate(familiarity_num = case_when(
-    Familiarity.with.America == "Very low" ~ 0,
-    Familiarity.with.America == "Low" ~ 1,
-    Familiarity.with.America == "High" ~ 2,
-    Familiarity.with.America == "Very high" ~ 3,
-    TRUE ~ NA_integer_)) -> col_filtered
 
 # Filter out rows with N/A values in columns of interest
 working_dataset <- col_filtered |>
-  filter(!is.na(Quality.of.Life) & !is.na(Belonging) & !is.na(English.Speaking) & !is.na(Income)   &!is.na(Age) &!is.na(familiarity_num)) -> working_dataset
+  filter(!is.na(Quality.of.Life) & !is.na(Belonging) & !is.na(English.Speaking) & !is.na(Income)   &!is.na(Age) &!is.na(Familiarity.with.America)) -> working_dataset
   
 # Get init/post-filter dimensions
-dim(data)
-dim(working_dataset)
+cat("---", "\nFull Dataset:", "\n  Rows:", nrow(data), "\n  Columns:", ncol(data), "\n---", 
+    "\nWorking Dataset:", "\n  Rows:", nrow(working_dataset), "\n  Columns:", ncol(working_dataset), "\n---")
+
 
 ```
 
-**The dataset is tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns.There is also no rows with any NA values in any of the variables and there is only the six variable of interest present in the new dataset.**
+**The dataset is tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns.There is also no rows with any NA values in any of the variables and there is only the eight variable of interest present in the new dataset.**
+
+
+**To explore the impact of social and cultural dynamics on quality of life we filter columns for variables we expect to be indicative of how individuals are fitting in and interacting with society around them:**
+
+```{r}
+# Select variables for analysis of social/cultural integration variable effects on QoL
+social_dataset <- data |>
+  select(Quality.of.Life, English.Speaking, English.Difficulties, Identify.Ethnically, Familiarity.with.America, Belonging, Discrimination, Duration.of.Residency, US.Born, Close.Friends)
+
+# Create working dataset by dropping any rows w/ any empty predictor value
+social_wd <- social_dataset |>
+  drop_na()
+```
+
+We initially include both `English.Difficulties` and `English.Speaking` as factors, however after further consideration and analysis, we find significant correlation with and explanatory power of `English.Difficulties` from `English.Speaking`. From this we choose to drop `English.Difficulties` from the analysis, as it's effect is largely captured by `English.Speaking` and would muddle estimated effect sizes in any models.
+
+```{r}
+unique(social_dataset$English.Difficulties)
+unique(social_dataset$English.Speaking)
+
+# Create numeric variable representing a 4 option categorical variable for Speaking and Difficulty Speaking factors. Easier to work with compared to strings.
+social_wd <- social_wd |>
+  
+  mutate(speaking_num = case_when(
+    English.Speaking == "Not at all" ~ 0,
+    English.Speaking == "Not well" ~ 1,
+    English.Speaking == "Well" ~ 2,
+    English.Speaking == "Very well" ~ 3,
+    TRUE ~ NA_integer_)) |>
+  
+  mutate(difficulties_num = case_when(
+    English.Difficulties == "Not at all" ~ 0,
+    English.Difficulties == "Not much" ~ 1,
+    English.Difficulties == "Much" ~ 2,
+    English.Difficulties == "Very Much" ~ 3,
+    TRUE ~ NA_integer_))
+
+# Examine correlation between speaking ability and difficulty levels
+# We find a significant inverse relationship
+social_wd |>
+  select(speaking_num, difficulties_num) |>
+  drop_na() |>
+  cor()
+
+# Examine regression for significant relationship between English speaking ability
+# and difficulties while speaking English.
+summary(lm(formula = difficulties_num ~ speaking_num, data=social_wd))
+```
+
+
+
+
+
 
 
 ------------------------------------------------------------------------
@@ -118,16 +155,31 @@ ggplot(data = working_dataset, aes(x = Household.Size, y = Quality.of.Life)) +
 **Question #3: How do social and cultural dynamics affect the quality of life for Asian Americans?**
 
 ```{r}
-# Select variables for analysis of familiarities effect on QoL
-social_dataset <- data |>
-  select(English.Speaking, English.Difficulties, Identify.Ethnically, Familiarity.with.America, Belonging, Discrimination, Duration.of.Residency, US.Born)
 
-working_dataset <- drop_na(social_dataset)
+
+effects_set <- social_wd[ , -which(names(social_wd) %in% "English.Difficulties")]
+effects_set
+social_effects <- lm(formula = Quality.of.Life ~ ., data = effects_set)
+summary(social_effects)
+```
+
+
+```{r}
+social_wd |>
+  mutate(familiarity_num = case_when(
+    Familiarity.with.America == "Very low" ~ 0,
+    Familiarity.with.America == "Low" ~ 1,
+    Familiarity.with.America == "High" ~ 2,
+    Familiarity.with.America == "Very high" ~ 3,
+    TRUE ~ NA_integer_)) -> social_wd
+  
+  
 ```
 
 Save familiarity null value rows to predict later
 ```{r}
 social_NA_rows <- social_dataset[!complete.cases(social_dataset), ]
+head(social_NA_rows)
 ```
 
 ```{r}
@@ -137,7 +189,7 @@ desired_order_num <- c(0, 1, 2, 3)
 
 # Distribution of QoL depicted w/ Violin Plot for each familiarity level
 # Box Plot included for easy comparison of means between groups
-familiarity_dataset |>
+social_wd |>
   ggplot(aes(x = as.factor(familiarity_num), y = Quality.of.Life)) +
   geom_violin(aes(fill = familiarity_num)) +
   geom_boxplot(fill="#3d3d3d", color="black", width = 0.1, outlier.alpha = 0.25, outlier.color = "red") +
@@ -157,7 +209,7 @@ familiarity_dataset |>
 
 
 Model?
-```{r}
+```{r, eval=FALSE}
 
 model <- lm(formula=Quality.of.Life~ familiarity_num + Friends, data=working_dataset)
 summary(model)
