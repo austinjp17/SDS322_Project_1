@@ -127,12 +127,12 @@ ggplot(working_dataset) +
        y = "Frequency")
 
 #Skewed to the right, thus median and IQR
-median(working_dataset$Age)
-IQR(working_dataset$Age)
+median(working_dataset$Household.Size)
+IQR(working_dataset$Household.Size)
 
 ```
 
-**Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 40 +/- 25 years old.**
+**Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 3 +/- 2 household members.**
 
 ```{r}
 #Bivariate visualization of age and quality of life
