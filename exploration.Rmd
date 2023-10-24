@@ -12,6 +12,7 @@ library(readr)
 library(scales)
 library(broom)
 library(gridExtra)
+library(stargazer)
 ```
 
 ------------------------------------------------------------------------
@@ -24,11 +25,15 @@ For this project, the dataset we will use is a survey regardings the [quality of
 
 **(Kevin) Question 2: How does income affect the quality of life for Asian Americans?**
 
-**(Austin) Question 3: How do social and cultural dynamics affect the quality of life for Asian Americans?**
+**(Austin) Question 3: How do cultural identity and social integration dynamics affect the quality of life for Asian Americans?**
 
 ------------------------------------------------------------------------
 
+___
+
 ## 2. Method
+
+___
 
 The dataset obtained from UT Austin AAQoL Research Team was already tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns. However, there still some cleanup left to do such as selecting only the six variable we are interested in and removing rows with NA values in any of these variables.
 
@@ -40,12 +45,12 @@ data <- read.csv(
 
 # Select Columns of Interest
  col_filtered <- data|>
-  select(Quality.of.Life, Belonging, English.Speaking, Income, Age, Household.Size, Familiarity.with.America, Friends)
+  select(Quality.of.Life, Income, Age, Household.Size)
 
 
 # Filter out rows with N/A values in columns of interest
 working_dataset <- col_filtered |>
-  filter(!is.na(Quality.of.Life) & !is.na(Belonging) & !is.na(English.Speaking) & !is.na(Income)   &!is.na(Age) &!is.na(Familiarity.with.America)) -> working_dataset
+  filter(!is.na(Quality.of.Life) & !is.na(Income)   &!is.na(Age)) -> working_dataset
   
 # Get init/post-filter dimensions
 cat("---", "\nFull Dataset:", "\n  Rows:", nrow(data), "\n  Columns:", ncol(data), "\n---", 
@@ -54,30 +59,54 @@ cat("---", "\nFull Dataset:", "\n  Rows:", nrow(data), "\n  Columns:", ncol(data
 
 ```
 
-**The dataset is tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns.There is also no rows with any NA values in any of the variables and there is only the eight variable of interest present in the new dataset.**
+Our dataset is nearly tidy because each row is an individual observation (Asian American) and each variable (explanatory and outcome) has its own columns. We complete tidying it by filtering columns down to our explanatory and 3 factors relevant for the first and second question, then strip out any rows containing NA values.
 
+___
 
-**To explore the impact of social and cultural dynamics on quality of life we filter columns for variables we expect to be indicative of how individuals are fitting in and interacting with society around them:**
+To explore the impact of social and cultural dynamics on quality of life we filter columns for variables we expect to possibly be indicative of how individuals are fitting in and interacting with society around them. We are liberal with our initial selection of factors as we will trim the set for relevant factors later in this section.  In an effort to get a more accurate estimate of $\beta$ we include a set of control variables unrelated to our question, intended to capture correlated differences in traits between subgroups of our population: `[Age, Income, Gender, Student, Retired, Regular.Exercise]`. To make modeling inputs and results more intuitive, we transform categorical variables in factors and controls into numeric variables where the low/high value represents the low/high end of the variable. 
 
 ```{r}
 # Select variables for analysis of social/cultural integration variable effects on QoL
-social_dataset <- data |>
-  select(Quality.of.Life, English.Speaking, English.Difficulties, Identify.Ethnically, Familiarity.with.America, Belonging, Discrimination, Duration.of.Residency, US.Born, Close.Friends)
+# We also include control variables to further isolate the true effect
+# Control Variables: Income
+social_columns <- data |>
+  select(Quality.of.Life, English.Speaking, English.Difficulties, Identify.Ethnically, Familiarity.with.America, Belonging, Discrimination, Duration.of.Residency, US.Born, Close.Friends,
+         # Controls
+         Age, Income, Gender, Student, Retired, Regular.Exercise)
 
-# Create working dataset by dropping any rows w/ any empty predictor value
-social_wd <- social_dataset |>
-  drop_na()
+# **Create working dataset**
+#
+# Map Categorical variables to numerical
+# Max of 4 values per categorical
+# Use numerical mappings for simplified regression estimation and plot ordering
+# 
+# Factor Remapping: {
+#    English.Speak == speaking_num ~ [0:3]
+#    English.Difficulties == difficulties_num ~ [0:3]
+#    Identify.Ethnically == eth_identity_num ~ [0:3]
+#    Familiarity.with.America == us_familiarity_num ~ [0:3]
+#    Belonging == belonging_num ~ [0:3]
+#    US.Born == us_born_num ~ [0:1]
+
+#  }
+#
+# Control Remapping: {
+#    Income == income_num ~ [0:7]
+#    Gender == male_num ~ [0:1]
+#    Retired == retired_num ~ [0:1]
+#    Student == student_num ~ [0:1]
+#    Age == age_bin ~ [0:80; by=10]
+#    
+# }
+# 
 ```
 
-We initially include both `English.Difficulties` and `English.Speaking` as factors, however after further consideration and analysis, we find significant correlation with and explanatory power of `English.Difficulties` from `English.Speaking`. From this we choose to drop `English.Difficulties` from the analysis, as it's effect is largely captured by `English.Speaking` and would muddle estimated effect sizes in any models.
 
-```{r}
-unique(social_dataset$English.Difficulties)
-unique(social_dataset$English.Speaking)
 
-# Create numeric variable representing a 4 option categorical variable for Speaking and Difficulty Speaking factors. Easier to work with compared to strings.
-social_wd <- social_wd |>
+```{r Reassign categorical variables, echo=FALSE}
+social_columns <- social_columns |>
   
+  # FACTOR MAPPINGS
   mutate(speaking_num = case_when(
     English.Speaking == "Not at all" ~ 0,
     English.Speaking == "Not well" ~ 1,
@@ -89,36 +118,185 @@ social_wd <- social_wd |>
     English.Difficulties == "Not at all" ~ 0,
     English.Difficulties == "Not much" ~ 1,
     English.Difficulties == "Much" ~ 2,
-    English.Difficulties == "Very Much" ~ 3,
-    TRUE ~ NA_integer_))
+    English.Difficulties == "Very much" ~ 3,
+    TRUE ~ NA_integer_)) |>
+  
+  mutate(eth_identity_num = case_when(
+    Identify.Ethnically == "Not very" ~ 0,
+    Identify.Ethnically == "Not very close" ~ 1,
+    Identify.Ethnically == "Somewhat close" ~ 2,
+    Identify.Ethnically == "Very close" ~ 3,
+    TRUE ~ NA_integer_)) |>
+  
+  mutate(us_familiarity_num = case_when(
+    Familiarity.with.America == "Very low" ~ 0,
+    Familiarity.with.America == "Low" ~ 1,
+    Familiarity.with.America == "High" ~ 2,
+    Familiarity.with.America == "Very high" ~ 3,
+    TRUE ~ NA_integer_)) |>
+  
+  mutate(belonging_num = case_when(
+    Belonging == "Not at all" ~ 0,
+    Belonging == "Not very much" ~ 1,
+    Belonging == "Somewhat" ~ 2,
+    Belonging == "Very much" ~ 3,
+    TRUE ~ NA_integer_)) |>
+  
+  mutate(us_born_num = case_when(
+    US.Born == "No" ~ 0,
+    US.Born == "Yes" ~ 1,
+    TRUE ~ NA_integer_)) |>
+  
+  # CONTROL VARIABLE MAPPINGS
+  
+  mutate(income_num = case_when(
+    Income == "$0 - $9,999" ~ 0,
+    Income == "$10,000 - $19,999" ~ 1,
+    Income == "$20,000 - $29,999" ~ 2,
+    Income == "$30,000 - $39,999"~ 3,
+    Income == "$40,000 - $49,999" ~ 4,
+    Income == "$50,000 - $59,999" ~ 5,
+    Income == "$60,000 - $69,999" ~ 6,
+    Income == "$70,000 and over"~7,
+    TRUE ~ NA_integer_
+  )) |>
+  
+  mutate(male_num = case_when(
+    Gender == "Male" ~ 1,
+    Gender == "Female" ~ 0,
+    TRUE ~ NA_integer_
+  )) |>
+  
+  mutate(retired_num = case_when(
+    Retired == "Retired" ~ 1,
+    Retired == "0" ~ 0,
+    TRUE ~ NA_integer_
+  )) |>
+  
+  mutate(student_num = case_when(
+    Student == "Student" ~ 1,
+    Student == "0" ~ 0,
+    TRUE ~ NA_integer_
+  ))
 
-# Examine correlation between speaking ability and difficulty levels
-# We find a significant inverse relationship
-social_wd |>
-  select(speaking_num, difficulties_num) |>
-  drop_na() |>
-  cor()
+social_wd <- social_columns |>
+  drop_na(difficulties_num, speaking_num, eth_identity_num, us_familiarity_num, belonging_num, us_born_num, Duration.of.Residency, Close.Friends, Quality.of.Life, Age, income_num, male_num, student_num, retired_num, Regular.Exercise) |>
+  mutate(age_bin = cut(Age, breaks = seq(from = min(Age), to = max(Age), by = 10)))
 
-# Examine regression for significant relationship between English speaking ability
-# and difficulties while speaking English.
-summary(lm(formula = difficulties_num ~ speaking_num, data=social_wd))
+cat("\nTotal Rows: ", nrow(social_columns), "\nRows w/ NA's:", nrow(social_columns) - nrow(social_wd),
+"\nNo-NA Rows: ",nrow(social_wd), "\nData Loss(%): ", round(100*(nrow(social_columns) - nrow(social_wd))/nrow(social_columns),3))
+
+```
+
+We end up losing 405 rows, about 15.5\% of our dataset. Excluding controls the loss only falls to $\approx 14\%$. We consider this trade-off to be worthwhile and keep the controls. The rows lost per factor is distributed very tightly around $\approx 38$ removed rows for N/A values per explanatory. We save the rows with N/A values for the possibility of predicting the null values and reducing the data loss on filtration.
+
+Additionally, we include a list of helper functions we used to handle common tasks:
+
+```{r Helper Functions}
+# Builds string output for vector-like obj
+# Returns: "[a, b, c]"
+format_vec <- function(vec) {
+  vec_str <- paste(as.vector(vec), collapse = ", ")
+  final_str <- paste0("[", vec_str, "]")
+  return(final_str)
+}
 ```
 
 
 
+```{r, echo=FALSE}
+social_NA_rows <- social_columns[!complete.cases(social_columns), ]
+```
+
+We use a linear regression as an initial filter for inconsequential factors/controls, and a signal those that deserve further exploration.  
+
+```{r}
+social_factors <- social_wd |>
+  select(speaking_num, difficulties_num, eth_identity_num, us_familiarity_num, belonging_num, us_born_num, Close.Friends, Duration.of.Residency, Quality.of.Life, income_num, male_num, income_num, retired_num, student_num, age_bin)
+
+social_model <- lm(formula = Quality.of.Life ~ ., data=social_factors)
+summary(social_model)
+```
+
+From the results of the regression, we found the vast majority of our factors to be statistically significant. Identifying ethnically and residency duration were the only explanatory variables of interest found not to be statistically significant:  $$\beta_{Eth\_Identity} \approx 0.035$$ $$SE_{Eth\_Identity} \approx 0.052$$ $$P > 0.10$$. Our estimator contains zero within a single standard error, giving us confidence in the conclusion of insignificance, and allowing us to disregard strength of ethnical identification as a factor in further analysis. Our control variables were the opposite; most were found to be statistically insignificant. Of the set, we find an individuals income bin to be by far the most statistically relevant ($\beta_{Income} = 0.098, \hspace{1mm}P < 0.001$). There's also a weak relationship between gender and QoL significant at a 5\% alpha level ($\beta_{Gender} = -0.133, \hspace{1mm}P < 0.05$). We find no significant relationship between retirement/student status with QoL, implying that there is no inherent differences in average happiness between those who are students, in the workforce, or retired. We find similar results for a raw numeric age variable or age bins. Taking this into account, our control variable set is trimmed down to income level and gender.
+
+To account for our factor/control removals, we re-append the rows previously removed based on N/A values in the relevant rows. 
+
+```{r Factor/Control variable corrections}
+
+# Isolate the rows we need to add back in
+rows_to_add <- social_columns |>
+  filter(is.na(eth_identity_num) | is.na(student_num) | is.na(retired_num)) |>
+  drop_na(difficulties_num, speaking_num, us_familiarity_num, belonging_num, us_born_num, Duration.of.Residency, Close.Friends, Quality.of.Life)
+
+# Combine Dataframes by rows
+social_wd <- bind_rows(social_wd, rows_to_add)
+
+# Drop insignificant variables
+social_wd <- subset(social_wd, select = c(-Identify.Ethnically, -eth_identity_num, -Retired, -retired_num, -Student, -student_num, -age_bin, -Age, -Close.Friends, -Duration.of.Residency))
+social_factors <- social_wd |>
+  select(speaking_num, difficulties_num, us_familiarity_num, belonging_num, us_born_num,  income_num, male_num, Quality.of.Life,)
+
+social_model <- lm(formula = Quality.of.Life ~ ., data=social_factors)
+summary(social_model)
 
 
+names(social_wd)
+# Get a count of rows added back in
+nrow(rows_to_add)
 
+```
+
+
+We also further explore the relationship between the factors `English.Difficulties` and `English.Speaking` to ensure the two variables aren't measuring the same effect. 
+
+```{r}
+
+# Examine correlation between speaking ability and difficulty levels
+# We find a significant inverse relationship
+
+
+# cat(
+#   "`English.Difficulties` categories:", format_vec(unique(social_wd$English.Difficulties)),
+#   "\n`English.Speaking` categories:", format_vec(unique(social_wd$English.Speaking))
+# )
+
+# Examine regression for significant relationship between English speaking ability
+# and difficulties while speaking English.
+aux_reg <- lm(formula = difficulties_num ~ speaking_num, data=social_wd)
+summary(aux_reg)
+
+social_wd |>
+  select(speaking_num, difficulties_num) |>
+  cor()
+
+```
+
+We find a small but significant relationship, English speaking ability explains about 4% of variation in frequency of English difficulties. We find similar evidence in the correlation matrix, showing us an weak inverse relationship. Even though the relationship is significant, they seem independent enough that we will leave both variables in as explanitories. 
+
+As a final check for the presence of endogeneity between speaking ability and frequency of English difficulties, we compare the results of a long regression containing both as factors and a short regression excluding frequency of difficulties. We find around a $.35SE$ difference in speaking ability's $\beta$ estimation, a marginal change in magnitude, further discrediting the idea of of speaking ability being endogenous. We also see that by including frequency of difficulties, our model's explanatory power increases by around 1\%, which convinced us to include difficulties frequency as a factor in the final set. $$R^2_{S} = 0.201$$ $$R^2_{L} = 0.209$$ We also use the long model to confirm the existence of a strong and significant relationship with Quality of Life for all other explanitories and controls.
+
+```{r, warning=FALSE}
+
+short_model <- lm(formula = Quality.of.Life ~. - difficulties_num, data=social_factors)
+long_model <- lm(formula = Quality.of.Life ~ ., data=social_factors)
+stargazer(short_model, long_model, type = "text")
+```
+
+We find 
 
 ------------------------------------------------------------------------
 
+___
+
 ## 3. Results
+
+___
 
 **Question 1: How does household size affect the quality of life for Asian Americans?**
 
 ```{r}
 # Numeric univariate visualization
-head(working_dataset)
 ggplot(working_dataset) +
   geom_histogram(aes(x = Household.Size), color = "blue", fill = "orange", # add color and fill
                  bins= 10, binwidth = 1, center = 1) + # adjust the binwidth + center of the first bin
@@ -133,7 +311,7 @@ IQR(working_dataset$Age)
 
 ```
 
-**Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 40 +/- 25 years old.**
+Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 40 +/- 25 years old.
 
 ```{r}
 #Bivariate visualization of age and quality of life
@@ -150,37 +328,50 @@ ggplot(data = working_dataset, aes(x = Household.Size, y = Quality.of.Life)) +
 
 ```
 
-**Using the difference between the error bars for each household size as comparison, it seems that there isn’t any correlation between household size and quality of life. The only significant difference can be seen with household size of 7 vs. 2, 4, 5, and 8 which may just be by random chance.**
+Using the difference between the error bars for each household size as comparison, it seems that there isn’t any correlation between household size and quality of life. The only significant difference can be seen with household size of 7 vs. 2, 4, 5, and 8 which may just be by random chance.
+
+___
+
+**Question 2: How does income affect the quality of life for Asian Americans?**
+
+```{r}
+ggplot(working_dataset) +
+  geom_bar(aes(x = Income), color = "green", fill = "yellow",
+                 bins= 10, binwidth = 1, center = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of Income",
+       x = "Income",
+       y = "Frequency")
+
+median(working_dataset$Income, na.rm =  T)
+```
+
+From the data given, there are more subjects with an income as high as $70,000 or above. The median of the data is nearly around $60,000-$69,999.
+
+```{r}
+working_dataset |>
+ggplot(aes(x = Income, y = Quality.of.Life)) +
+  # By default a bar represents a count but we can change what the height of a bar represents
+  # Represent a summary stat using the mean function 
+  geom_bar(stat = "summary", fun = "mean",  color = "blue", fill = "orange") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Income",
+       y = "Quality of Life",
+       title = "Quality of Life v. Income") +
+  # Add error bars
+  geom_errorbar(stat = "summary", fun.data = "mean_se")
+```
+
+
+The visualization of the relationship between income and the quality of life provided that the quality of life slowly increases from increasing income. From the data, those that have at least $70,000 are more likely to experience a higher quality of life, proving it has statistical difference from those that have less than $70,000 in their deposits.
+
+___
 
 **Question #3: How do social and cultural dynamics affect the quality of life for Asian Americans?**
 
-```{r}
+The first thing we notice is that those born in the US are significantly less happy on average at any alpha level than those who immigrate by about 5%. ($\beta_{born\_us} = -0.476, P \approx 2.09 \times 10^-5$).
 
 
-effects_set <- social_wd[ , -which(names(social_wd) %in% "English.Difficulties")]
-effects_set
-social_effects <- lm(formula = Quality.of.Life ~ ., data = effects_set)
-summary(social_effects)
-```
-
-
-```{r}
-social_wd |>
-  mutate(familiarity_num = case_when(
-    Familiarity.with.America == "Very low" ~ 0,
-    Familiarity.with.America == "Low" ~ 1,
-    Familiarity.with.America == "High" ~ 2,
-    Familiarity.with.America == "Very high" ~ 3,
-    TRUE ~ NA_integer_)) -> social_wd
-  
-  
-```
-
-Save familiarity null value rows to predict later
-```{r}
-social_NA_rows <- social_dataset[!complete.cases(social_dataset), ]
-head(social_NA_rows)
-```
 
 ```{r}
 # Ordered Label Switch Vectors
@@ -190,8 +381,8 @@ desired_order_num <- c(0, 1, 2, 3)
 # Distribution of QoL depicted w/ Violin Plot for each familiarity level
 # Box Plot included for easy comparison of means between groups
 social_wd |>
-  ggplot(aes(x = as.factor(familiarity_num), y = Quality.of.Life)) +
-  geom_violin(aes(fill = familiarity_num)) +
+  ggplot(aes(x = as.factor(us_familiarity_num), y = Quality.of.Life)) +
+  geom_violin(aes(fill = us_familiarity_num)) +
   geom_boxplot(fill="#3d3d3d", color="black", width = 0.1, outlier.alpha = 0.25, outlier.color = "red") +
   scale_y_continuous(labels = scales::comma) +
   labs(
@@ -217,19 +408,35 @@ summary(model)
 
 ------------------------------------------------------------------------
 
+___
+
 ## 4. Discussion
+
+___
 
 **Question 1: How does household size affect the quality of life for Asian Americans?**
 
 The visualization showed that there isn’t any correlation between household size and quality of life as seen in visual (#). As seen in the bar graph, there isn’t a significant difference in the mean quality of life (1-10) between the different household sizes. The only exception is household size of 7 vs. 2, 4, 5, and 8 which may just be by random chance. The data didn’t match my expectations because I believe that lower household size would have higher quality of life. A possible reason for why it fails to meet my prediction is that different household sizes each have their own problems and enjoyment. The only result I’m curious about is why the quality of life for household size of 7 dipped compared to the other household size. The implications of my study is that Asian Americans wouldn’t be too worried about having too small or too large of a household size because according to this data, household size didn’t have a noticeable effect on their quality of life. Therefore, Asian Americans can have any household size they want as it wouldn't affect their happiness. The main takeaway for these findings is that household size doesn’t affect quality of life for Asian Americans living in Austin.
 
-**Question 3: What effect does familiarity with America have on Asian American quality of life?**
+___
+
+**Question 2: How does income affect the quality of life for Asian Americans?**
+
+Overall, the visualization provided the bar graph of each income level in relation to the quality of life that Asian Americans have experienced. The graph displayed a somewhat increase in the quality of life due to the increased income level, though gradually. The data satisfies my expectation that those with high income or profit are more likely to be lively and experience enjoyment in life. The implication states that Asian Americans would be motivated to obtain a higher profit at their possession as a way to live a better life. Therefore, income can have an effect on how Asian Americans are thriving.
+
+___
+
+**Question 3: How do cultural identity and social integration dynamics affect the quality of life for Asian Americans?**
 
 
 
 ------------------------------------------------------------------------
 
+___
+
 ## 5. Reflection, Acknowledgements, and References
+
+___
 
 **The challenging part was cleaning up the data to ensure that it can be analyzed with the visualization to answer our research questions. Thankfully, the data collected by UT Austin AAQoL Research Team was already tidy to begin with which made the process so much easier. To further clean up the data by removing NA value and only selecting the variables of interest, it was due to Dr. Layot’s lectures on data wrangling that this step went a lot smoother. Additionally, the making of the ggplots for visualizations was also made easier to the lecture material provided by Dr. Layot.**
 
