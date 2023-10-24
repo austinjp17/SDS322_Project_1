@@ -106,9 +106,16 @@ social_columns <- data |>
 # 
 ```
 
-
+# ASK ABOUT FACTORS
 
 ```{r Reassign categorical variables, echo=FALSE}
+unique(social_columns$English.Speaking)
+speaking_ability_lvls <- c("Not at all", "Not well", "Well", "Very well")
+# social_columns |>
+#   mutate(speaking_num == factor(English.Speaking, levels=speaking_ability_lvls, labels=speaking_ability_lvls)) |>
+#   select(English.Speaking, speaking_num)
+
+speaking_ability_lvls <- c("Not at all", "Not well", "Well", "Very well")
 social_columns <- social_columns |>
   
   # FACTOR MAPPINGS
@@ -118,6 +125,7 @@ social_columns <- social_columns |>
     English.Speaking == "Well" ~ 2,
     English.Speaking == "Very well" ~ 3,
     TRUE ~ NA_integer_)) |>
+  
   
   mutate(difficulties_num = case_when(
     English.Difficulties == "Not at all" ~ 0,
@@ -186,6 +194,7 @@ social_columns <- social_columns |>
 
 social_wd <- social_columns |>
   drop_na(difficulties_num, speaking_num, eth_identity_num, us_familiarity_num, belonging_num, us_born_num, Duration.of.Residency, Close.Friends, Quality.of.Life, Age, income_num, male_num, student_num, retired_num, Regular.Exercise) |>
+  # Create Age Bins after dropping `Age` nulls
   mutate(age_bin = cut(Age, breaks = seq(from = min(Age), to = max(Age), by = 10)))
 
 cat("\nTotal Rows: ", nrow(social_columns), "\nRows w/ NA's:", nrow(social_columns) - nrow(social_wd),
@@ -209,7 +218,9 @@ social_model <- lm(formula = Quality.of.Life ~ ., data=social_factors)
 summary(social_model)
 ```
 
-From the results of the regression, we found the vast majority of our factors to be statistically significant. Identifying ethnically and residency duration were the only explanatory variables of interest found not to be statistically significant:  $$\beta_{Eth\_Identity} \approx 0.035$$ $$SE_{Eth\_Identity} \approx 0.052$$ $$P > 0.10$$. Our estimator contains zero within a single standard error, giving us confidence in the conclusion of insignificance, and allowing us to disregard strength of ethnical identification as a factor in further analysis. Our control variables were the opposite; most were found to be statistically insignificant. Of the set, we find an individuals income bin to be by far the most statistically relevant ($\beta_{Income} = 0.098, \hspace{1mm}P < 0.001$). There's also a weak relationship between gender and QoL significant at a 5\% alpha level ($\beta_{Gender} = -0.133, \hspace{1mm}P < 0.05$). We find no significant relationship between retirement/student status with QoL, implying that there is no inherent differences in average happiness between those who are students, in the workforce, or retired. We find similar results for a raw numeric age variable or age bins. Taking this into account, our control variable set is trimmed down to income level and gender.
+$\hspace{.5cm}$From the results of the regression, we found the vast majority of our factors to be statistically significant. Identifying ethnically and residency duration were the only explanatory variables of interest found not to be statistically significant:  $$\beta_{Eth\_Identity} \approx 0.035$$ $$SE_{Eth\_Identity} \approx 0.052$$ $$P > 0.10$$. Our estimator contains zero within a single standard error, giving us confidence in the conclusion of insignificance, and allowing us to disregard strength of ethnical identification as a factor in further analysis. Our control variables were the opposite; most were found to be statistically insignificant. Of the set, we find an individuals income bin to be by far the most statistically relevant ($\beta_{Income} = 0.098, \hspace{1mm}P < 0.001$). There's also a weak relationship between gender and QoL significant at a 5\% alpha level ($\beta_{Gender} = -0.133, \hspace{1mm}P < 0.05$). We find no significant relationship between retirement/student status with QoL, implying that there is no inherent differences in average happiness between those who are students, in the workforce, or retired. We find similar results for a raw numeric age variable or age bins. Taking this into account, our control variable set is trimmed down to income level and gender.
+
+___
 
 To account for our factor/control removals, we re-append the rows previously removed based on N/A values in the relevant rows. 
 
@@ -225,45 +236,46 @@ social_wd <- bind_rows(social_wd, rows_to_add)
 
 # Drop insignificant variables
 social_wd <- subset(social_wd, select = c(-Identify.Ethnically, -eth_identity_num, -Retired, -retired_num, -Student, -student_num, -age_bin, -Age, -Close.Friends, -Duration.of.Residency))
+
+# Final factors definition
 social_factors <- social_wd |>
   select(speaking_num, difficulties_num, us_familiarity_num, belonging_num, us_born_num,  income_num, male_num, Quality.of.Life,)
+  
+
 
 social_model <- lm(formula = Quality.of.Life ~ ., data=social_factors)
 summary(social_model)
 
 # Get a count of rows added back in
-nrow(rows_to_add)
+cat("Number of rows to append:", nrow(rows_to_add))
 
 ```
 
 
-We also further explore the relationship between the factors `English.Difficulties` and `English.Speaking` to ensure the two variables aren't measuring the same effect. 
+$\hspace{.5cm}$ We also further explore the relationship between the factors `English.Difficulties` and `English.Speaking` to ensure the two variables aren't measuring the same effect.
 
 ```{r}
-
-# Examine correlation between speaking ability and difficulty levels
-# We find a significant inverse relationship
-
-
-# cat(
-#   "`English.Difficulties` categories:", format_vec(unique(social_wd$English.Difficulties)),
-#   "\n`English.Speaking` categories:", format_vec(unique(social_wd$English.Speaking))
-# )
 
 # Examine regression for significant relationship between English speaking ability
 # and difficulties while speaking English.
 aux_reg <- lm(formula = difficulties_num ~ speaking_num, data=social_wd)
-summary(aux_reg)
+aux_summary <- grid.table(capture.output(summary(aux_reg)))
 
-social_wd |>
+cor_matrix <- social_wd |>
+  mutate(speaking_num = as.numeric(as.character(speaking_num))) |>
   select(speaking_num, difficulties_num) |>
   cor()
+cor_matrix
 
+cor_grid <- grid.table(as.data.frame(as.table(cor_matrix)))
+cor_grid
+
+grid.arrange(aux_summary, cor_grid, ncol=2)
 ```
 
-We find a small but significant relationship, English speaking ability explains about 4% of variation in frequency of English difficulties. We find similar evidence in the correlation matrix, showing us an weak inverse relationship. Even though the relationship is significant, they seem independent enough that we will leave both variables in as explanitories. 
+$\hspace{.5cm}$We find a small but significant relationship, English speaking ability explains about 4% of variation in frequency of English difficulties. We find similar evidence in the correlation matrix, showing us an weak inverse relationship. Even though the relationship is significant, they seem independent enough that we will leave both variables in as explanitories.
 
-As a final check for the presence of endogeneity between speaking ability and frequency of English difficulties, we compare the results of a long regression containing both as factors and a short regression excluding frequency of difficulties. We find around a $.35SE$ difference in speaking ability's $\beta$ estimation, a marginal change in magnitude, further discrediting the idea of of speaking ability being endogenous. We also see that by including frequency of difficulties, our model's explanatory power increases by around 1\%, which convinced us to include difficulties frequency as a factor in the final set. $$R^2_{S} = 0.201$$ $$R^2_{L} = 0.209$$ We also use the long model to confirm the existence of a strong and significant relationship with Quality of Life for all other explanitories and controls.
+$\hspace{.5cm}$As a final check for the presence of endogeneity between speaking ability and frequency of English difficulties, we compare the results of a long regression containing both as factors and a short regression excluding frequency of difficulties. We find around a $.35SE$ difference in speaking ability's $\beta$ estimation, a marginal change in magnitude, further discrediting the idea of of speaking ability being endogenous. We also see that by including frequency of difficulties, our model's explanatory power increases by around 1\%, which convinced us to include difficulties frequency as a factor in the final set. $$R^2_{S} = 0.201$$ $$R^2_{L} = 0.209$$ We also use the long model to confirm the existence of a strong and significant relationship with Quality of Life for all other explanitories and controls.
 
 ```{r, warning=FALSE}
 
@@ -405,8 +417,6 @@ social_model <- lm(formula=Quality.of.Life ~., data=social_factors)
 summary(social_model)
 ```
 
-
-
 **Examining our regression output, speaking ability is by far the most influential variable of our factors. We find with high confidence that when individuals become more proficient at English ^[Measured from 0 to 3 where high numbers imply increased proficiency] their happiness increases by about 4\% ($\beta_{speaking} = 0.402$) significant at any alpha level. The first thing we notice is that those born in the US are significantly less happy on average at any alpha level than those who immigrate by about 5%. ($\beta_{US\_born} = -0.476, \hspace{1mm}P < 0.001$). Whether an individual was born in the U.S. and their familiarity with the U.S. play the 2nd and 3rd biggest roles. We find an increase in familiarity with the U.S.^[Measured 0-3 where higher values imply greater familiarity.] to increase quality of life by around 3\% ($\beta_{familiarity} = 0.334$) significant at a 0.1\% alpha level. Of similar magnitude, we find that individuals born in the U.S. to have a 3\% lower quality of life than those born internationally significant at a 1\% alpha. Our remaining explanitories, belonging and frequency of speaking difficulties are both found to be significant at a 0.1\% alpha level and not to contain 0 within 3 deviations, but have medium to weak effect sizes. An increase in sense of belonging^[Measured 0-3; higher values indicated an increased sense of belonging] increases an individuals quality of life by around 1.5\% ($\beta_{belonging} = 0.169$). Regarding the later, we find that increased frequency of English difficulties decreases an individual's quality of life by around $-1.3\%$ on average ($\beta_{difficulties} = -0.134$). Zooming out, our model explains around 20\% of change in quality of life for Asians living in Austin, Texas.**
 
 **We explore the relationship between quality of life and large effect size factors in more detail below beginning with speaking ability:**
@@ -426,32 +436,27 @@ ___
 desired_order <- c("Not at all", "Not Well", "Well", "Very Well")
 desired_order_num <- c(0, 1, 2, 3)
 
+
 total_rows <- nrow(social_factors)
 freq_table <- social_wd %>%
-  group_by(speaking_num, English.Speaking) %>%
+  group_by(speaking_num, English.Speaking) |>
   summarise(Frequency = n(), Percentage = round((Frequency/total_rows)*100, 3))
 
 
 speaking_hist <- social_factors |>
   ggplot(aes(x=speaking_num)) +
   geom_histogram(binwidth = .1, fill="skyblue") +
-  scale_x_continuous(breaks = desired_order_num, labels = desired_order) +
   labs(
     x = "English Speaking Ability",
     y = "Frequency",
     title = "Distribution of English Speaking Ability amound Asians living in Austin, Texas"
   )
 
-
-
-col_widths <- unit(c(1, 1, 1, 1), "mm")
 table_grob <- tableGrob(freq_table, 
                         theme = table_theme,
-                        widths=col_widths, rows = NULL)
+                        rows = NULL)
 
-
-
-grid.arrange(speaking_hist, separator, table_grob, ncol = 1, nrow = 3, heights=c(4,0.01, 2))
+grid.arrange(speaking_hist, separator, table_grob, ncol = 1, nrow = 3, heights=c(4,0.01,2))
 ```
 
 
@@ -471,14 +476,19 @@ remap(label_mapping, speaking_num, IQR(social_factors$speaking_num), speaking_ca
 We see the higher ability skew reflected in the median and IQR value of 2^[Measured 0-3] closer to the max than the min. 
 
 *Bivariate Analysis*
-
+proficiency
 ```{r}
-social_factors |>
+speaking_boxplot <- social_factors |>
   mutate(speaking_num = as.factor(speaking_num)) |>
   ggplot(aes(x = speaking_num, y=Quality.of.Life)) +
-  geom_boxplot(aes(fill = speaking_num), outlier.alpha = .5)
+  geom_boxplot(aes(fill = speaking_num), outlier.alpha = .5) +
+  labs (
+    x = "English Proficiency",
+    y = "Quality of Life",
+    title = "Distribution of QoL given English Proficiency level"
+  )
 
-social_factors |>
+speaking_tbl <- social_factors |>
   mutate(speaking_num = as.factor(speaking_num)) |>
   group_by(speaking_num) |>
   summarise("Mean QoL" = round(mean(Quality.of.Life), 3), Variance = var(Quality.of.Life)) |>
@@ -487,6 +497,12 @@ social_factors |>
     "QoL Change" = `Mean QoL` - lag(`Mean QoL`),
     "% Qol Change" = round((`Mean QoL` / lag(`Mean QoL`) - 1) * 100,2)
   )
+
+table_grob <- tableGrob(speaking_tbl, 
+                        theme = table_theme,
+                        rows = NULL)
+
+grid.arrange(speaking_boxplot, separator, table_grob, ncol = 1, nrow = 3, heights=c(4,0.01,2))
 ```
 
 Exam
