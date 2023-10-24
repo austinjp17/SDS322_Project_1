@@ -6,13 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.align = 'center')
 library(tidyverse)
 library(readr)
 library(scales)
 library(broom)
 library(gridExtra)
 library(stargazer)
+library(grid)
 ```
 
 ------------------------------------------------------------------------
@@ -70,9 +71,13 @@ To explore the impact of social and cultural dynamics on quality of life we filt
 # We also include control variables to further isolate the true effect
 # Control Variables: Income
 social_columns <- data |>
-  select(Quality.of.Life, English.Speaking, English.Difficulties, Identify.Ethnically, Familiarity.with.America, Belonging, Discrimination, Duration.of.Residency, US.Born, Close.Friends,
-         # Controls
-         Age, Income, Gender, Student, Retired, Regular.Exercise)
+  select(
+      # Factors
+      Quality.of.Life, English.Speaking, English.Difficulties, Identify.Ethnically, Familiarity.with.America, Belonging, Discrimination, Duration.of.Residency, US.Born, Close.Friends,
+      
+      # Controls
+      Age, Income, Gender, Student, Retired, Regular.Exercise
+    )
 
 # **Create working dataset**
 #
@@ -190,20 +195,6 @@ cat("\nTotal Rows: ", nrow(social_columns), "\nRows w/ NA's:", nrow(social_colum
 
 We end up losing 405 rows, about 15.5\% of our dataset. Excluding controls the loss only falls to $\approx 14\%$. We consider this trade-off to be worthwhile and keep the controls. The rows lost per factor is distributed very tightly around $\approx 38$ removed rows for N/A values per explanatory. We save the rows with N/A values for the possibility of predicting the null values and reducing the data loss on filtration.
 
-Additionally, we include a list of helper functions we used to handle common tasks:
-
-```{r Helper Functions}
-# Builds string output for vector-like obj
-# Returns: "[a, b, c]"
-format_vec <- function(vec) {
-  vec_str <- paste(as.vector(vec), collapse = ", ")
-  final_str <- paste0("[", vec_str, "]")
-  return(final_str)
-}
-```
-
-
-
 ```{r, echo=FALSE}
 social_NA_rows <- social_columns[!complete.cases(social_columns), ]
 ```
@@ -240,8 +231,6 @@ social_factors <- social_wd |>
 social_model <- lm(formula = Quality.of.Life ~ ., data=social_factors)
 summary(social_model)
 
-
-names(social_wd)
 # Get a count of rows added back in
 nrow(rows_to_add)
 
@@ -285,6 +274,43 @@ stargazer(short_model, long_model, type = "text")
 
 We find 
 
+
+Additionally, we include a list of helper objects and functions we used to handle common tasks:
+
+```{r Helper Objects/Functions}
+# Objects
+#
+# Output grid separation line
+separator <- rectGrob(gp = gpar(fill = "grey10"))
+
+# Table output theme
+table_theme <- ttheme_default(
+  core = list(fg_params = list(hjust = 0, x = 0.1, fontsize = 9)),
+  colhead = list(fg_params = list(fontsize = 10)),
+  rowhead = list(fg_params = list(fontsize = 10)),
+  line = list(lwd = 1) # Line width
+)
+
+# Builds string output for vector-like obj
+# Returns: "[a, b, c]"
+format_vec <- function(vec) {
+  vec_str <- paste(as.vector(vec), collapse = ", ")
+  final_str <- paste0("[", vec_str, "]")
+  return(final_str)
+}
+
+remap <- function(map_df, target_col, target_val, return_col) {
+  # Filter the dataframe to find the row with the target value in the target column
+  target_val <- map_df |>
+    filter({{target_col}} == target_val) |>
+    pull({{return_col}})
+  
+  return(target_val)
+}
+
+
+```
+
 ------------------------------------------------------------------------
 
 ___
@@ -293,14 +319,15 @@ ___
 
 ___
 
-**Question 1: How does household size affect the quality of life for Asian Americans?**
+### Question 1: How does household size affect the quality of life for Asian Americans?
 
-```{r}
+```{r, warning=FALSE}
 # Numeric univariate visualization
 ggplot(working_dataset) +
-  geom_histogram(aes(x = Household.Size), color = "blue", fill = "orange", # add color and fill
+  geom_histogram(aes(x = Household.Size), color = "#483773", fill = "#B5A9D4", # add color and fill
                  bins= 10, binwidth = 1, center = 1) + # adjust the binwidth + center of the first bin
-  scale_x_continuous(oob = scales::oob_keep, limits = c(0,10), breaks = seq(0,10,1)) + # adjust the tick marks of the x-axis
+  scale_x_continuous(oob = scales::oob_keep, limits = c(0,9), breaks = seq(0,9,1)) + # adjust the tick marks of the x-axis
+  scale_y_continuous(oob = scales::oob_keep, limits = c(0, 800), breaks = seq(0, 800, 200))
   labs(title = "Distribution of Household Size",
        x = "Household Size",
        y = "Frequency")
@@ -313,12 +340,13 @@ IQR(working_dataset$Age)
 
 Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 40 +/- 25 years old.
 
-```{r}
+```{r, warning=FALSE}
 #Bivariate visualization of age and quality of life
 ggplot(data = working_dataset, aes(x = Household.Size, y = Quality.of.Life)) +
   # By default a bar represents a count but we can change what the height of a bar represents
   # Represent a summary stat using the mean function 
-  geom_bar(stat = "summary", fun = "mean",  color = "blue", fill = "orange") +
+  geom_bar(stat = "summary", fun = "mean",  color = "#483773", fill = "#B5A9D4" ) +
+  
   # Adjust the label of the y-axis accordingly
   labs(y = "Quality of Life (1-10)",
        y = "Household Size",
@@ -332,12 +360,11 @@ Using the difference between the error bars for each household size as compariso
 
 ___
 
-**Question 2: How does income affect the quality of life for Asian Americans?**
+### Question 2: How does income affect the quality of life for Asian Americans?
 
 ```{r}
 ggplot(working_dataset) +
-  geom_bar(aes(x = Income), color = "green", fill = "yellow",
-                 bins= 10, binwidth = 1, center = 1) +
+  geom_bar(aes(x = Income), color = "#1e452b", fill = "#A8D5BA") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(title = "Distribution of Income",
        x = "Income",
@@ -353,7 +380,7 @@ working_dataset |>
 ggplot(aes(x = Income, y = Quality.of.Life)) +
   # By default a bar represents a count but we can change what the height of a bar represents
   # Represent a summary stat using the mean function 
-  geom_bar(stat = "summary", fun = "mean",  color = "blue", fill = "orange") +
+  geom_bar(stat = "summary", fun = "mean",  color = "#1e452b", fill = "#A8D5BA") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
   labs(x = "Income",
        y = "Quality of Life",
@@ -363,14 +390,113 @@ ggplot(aes(x = Income, y = Quality.of.Life)) +
 ```
 
 
-The visualization of the relationship between income and the quality of life provided that the quality of life slowly increases from increasing income. From the data, those that have at least $70,000 are more likely to experience a higher quality of life, proving it has statistical difference from those that have less than $70,000 in their deposits.
+The visualization of the relationship between income and the quality of life provided that the quality of life slowly increases from increasing income. From the data, those that have at least \$70,000 are more likely to experience a higher quality of life, proving it has statistical difference from those that have less than \$70,000 in their deposits.
 
 ___
 
-**Question #3: How do social and cultural dynamics affect the quality of life for Asian Americans?**
+### Question #3: How do social and cultural dynamics affect the quality of life for Asian Americans?
 
-The first thing we notice is that those born in the US are significantly less happy on average at any alpha level than those who immigrate by about 5%. ($\beta_{born\_us} = -0.476, P \approx 2.09 \times 10^-5$).
+___
 
+#### Regression Overview
+
+```{r}
+social_model <- lm(formula=Quality.of.Life ~., data=social_factors)
+summary(social_model)
+```
+
+
+
+**Examining our regression output, speaking ability is by far the most influential variable of our factors. We find with high confidence that when individuals become more proficient at English ^[Measured from 0 to 3 where high numbers imply increased proficiency] their happiness increases by about 4\% ($\beta_{speaking} = 0.402$) significant at any alpha level. The first thing we notice is that those born in the US are significantly less happy on average at any alpha level than those who immigrate by about 5%. ($\beta_{US\_born} = -0.476, \hspace{1mm}P < 0.001$). Whether an individual was born in the U.S. and their familiarity with the U.S. play the 2nd and 3rd biggest roles. We find an increase in familiarity with the U.S.^[Measured 0-3 where higher values imply greater familiarity.] to increase quality of life by around 3\% ($\beta_{familiarity} = 0.334$) significant at a 0.1\% alpha level. Of similar magnitude, we find that individuals born in the U.S. to have a 3\% lower quality of life than those born internationally significant at a 1\% alpha. Our remaining explanitories, belonging and frequency of speaking difficulties are both found to be significant at a 0.1\% alpha level and not to contain 0 within 3 deviations, but have medium to weak effect sizes. An increase in sense of belonging^[Measured 0-3; higher values indicated an increased sense of belonging] increases an individuals quality of life by around 1.5\% ($\beta_{belonging} = 0.169$). Regarding the later, we find that increased frequency of English difficulties decreases an individual's quality of life by around $-1.3\%$ on average ($\beta_{difficulties} = -0.134$). Zooming out, our model explains around 20\% of change in quality of life for Asians living in Austin, Texas.**
+
+**We explore the relationship between quality of life and large effect size factors in more detail below beginning with speaking ability:**
+
+___
+
+#### English Speaking Ability
+
+*Univariate Analysis*
+
+**We begin by exploring the distribution:**
+
+
+
+```{r warning=FALSE}
+
+desired_order <- c("Not at all", "Not Well", "Well", "Very Well")
+desired_order_num <- c(0, 1, 2, 3)
+
+total_rows <- nrow(social_factors)
+freq_table <- social_wd %>%
+  group_by(speaking_num, English.Speaking) %>%
+  summarise(Frequency = n(), Percentage = round((Frequency/total_rows)*100, 3))
+
+
+speaking_hist <- social_factors |>
+  ggplot(aes(x=speaking_num)) +
+  geom_histogram(binwidth = .1, fill="skyblue") +
+  scale_x_continuous(breaks = desired_order_num, labels = desired_order) +
+  labs(
+    x = "English Speaking Ability",
+    y = "Frequency",
+    title = "Distribution of English Speaking Ability amound Asians living in Austin, Texas"
+  )
+
+
+
+col_widths <- unit(c(1, 1, 1, 1), "mm")
+table_grob <- tableGrob(freq_table, 
+                        theme = table_theme,
+                        widths=col_widths, rows = NULL)
+
+
+
+grid.arrange(speaking_hist, separator, table_grob, ncol = 1, nrow = 3, heights=c(4,0.01, 2))
+```
+
+
+We find speaking ability in our dataset to be heavily skewed toward higher abilities. We can see easily in the table that the top two ability levels constitute $\approx 70\%$ of our observations. We can expect to see slightly wider confidence bands for lower ability level quality of life values. Even with the abnormal distribution, the lowest English speaking ability still has 113 observations, more than enough to meet the law of large numbers and allow us to make a confident estimate of the effect. Taking the irregular spread of our observed ability levels into account, we report the median and IQR for summary statistics. 
+
+```{r English Speaking Summary}
+
+label_mapping <- data.frame(
+  speaking_cat = c("Not at all", "Not well", "Well", "Very well"),
+  speaking_num = c(0,1,2,3)
+)
+
+cat("Median: ", median(social_factors$speaking_num),"-", remap(label_mapping, speaking_num, median(social_factors$speaking_num), speaking_cat), "\nIQR:", IQR(social_factors$speaking_num), "-",
+remap(label_mapping, speaking_num, IQR(social_factors$speaking_num), speaking_cat))
+```
+
+We see the higher ability skew reflected in the median and IQR value of 2^[Measured 0-3] closer to the max than the min. 
+
+*Bivariate Analysis*
+
+```{r}
+social_factors |>
+  mutate(speaking_num = as.factor(speaking_num)) |>
+  ggplot(aes(x = speaking_num, y=Quality.of.Life)) +
+  geom_boxplot(aes(fill = speaking_num), outlier.alpha = .5)
+
+social_factors |>
+  mutate(speaking_num = as.factor(speaking_num)) |>
+  group_by(speaking_num) |>
+  summarise("Mean QoL" = round(mean(Quality.of.Life), 3), Variance = var(Quality.of.Life)) |>
+  arrange(speaking_num) |>
+  mutate(
+    "QoL Change" = `Mean QoL` - lag(`Mean QoL`),
+    "% Qol Change" = round((`Mean QoL` / lag(`Mean QoL`) - 1) * 100,2)
+  )
+```
+
+Exam
+
+___
+
+
+
+
+#### U.S. Familiarity
 
 
 ```{r}
