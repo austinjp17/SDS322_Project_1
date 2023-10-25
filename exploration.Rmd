@@ -40,9 +40,7 @@ The dataset obtained from UT Austin AAQoL Research Team was already tidy because
 
 ```{r}
 # Read in Dataset
-data <- read.csv(
-  "~/Classes/sds322E/Project/Final_Report_of_the_Asian_American_Quality_of_Life__AAQoL_.csv"
-  )
+data <- read_csv("Final_Report_of_the_Asian_American_Quality_of_Life__AAQoL_.csv")
 
 # Select Columns of Interest
  col_filtered <- data|>
@@ -339,27 +337,25 @@ ggplot(working_dataset) +
   geom_histogram(aes(x = Household.Size), color = "#483773", fill = "#B5A9D4", # add color and fill
                  bins= 10, binwidth = 1, center = 1) + # adjust the binwidth + center of the first bin
   scale_x_continuous(oob = scales::oob_keep, limits = c(0,9), breaks = seq(0,9,1)) + # adjust the tick marks of the x-axis
-  scale_y_continuous(oob = scales::oob_keep, limits = c(0, 800), breaks = seq(0, 800, 200))
+  scale_y_continuous(oob = scales::oob_keep, limits = c(0, 800), breaks = seq(0, 800, 200)) +
   labs(title = "Distribution of Household Size",
        x = "Household Size",
        y = "Frequency")
 
-#Skewed to the right, thus median and IQR
-median(working_dataset$Age)
-IQR(working_dataset$Age)
+#Skewed to the right, thus median and IQR (added na.rm = T due to non-NA "" values)
+median(working_dataset$Household.Size, na.rm = T)
+IQR(working_dataset$Household.Size, na.rm = T)
 
 ```
 
-Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 40 +/- 25 years old.
+Because the distribution of household size is skewed to the right, the median and IQR will be reported. The median and IQR are 3 +/- 2 household members.
 
 ```{r, warning=FALSE}
 #Bivariate visualization of age and quality of life
 ggplot(data = working_dataset, aes(x = Household.Size, y = Quality.of.Life)) +
   # By default a bar represents a count but we can change what the height of a bar represents
   # Represent a summary stat using the mean function 
-  geom_bar(stat = "summary", fun = "mean",  color = "#483773", fill = "#B5A9D4" ) +
-  
-  # Adjust the label of the y-axis accordingly
+  geom_bar(stat = "summary", fun = "mean",  color = "#483773", fill = "#B5A9D4" ) +  
   labs(y = "Quality of Life (1-10)",
        y = "Household Size",
        title = "Quality of Life v. Household Size") +
